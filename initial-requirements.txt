@@ -1,0 +1,5 @@
+# conda install pytorch torchvision torchaudio cpuonly -c pytorch
+# conda install opencv pytesseract tesseract detectron2 -c conda-forge
+# pip install layoutparser jsonpickle
+conda install opencv pytesseract tesseract -c conda-forge
+pip install jsonpickle
