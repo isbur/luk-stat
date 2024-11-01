@@ -1,10 +1,10 @@
 import cv2
 from copy import deepcopy
-from typing import overload, TYPE_CHECKING
-from Geometry import Rectangle
+from typing import Any, overload, TYPE_CHECKING
+from .Geometry import Rectangle
 # Imported one more time after TesseractRow definition to avoid circular import
 if  TYPE_CHECKING:
-    from TesseractRowList import TesseractRowList, TesseractRow
+    from .TesseractRowList import TesseractRowList, TesseractRow
 
 
 class TesseractRowProto:
@@ -34,7 +34,7 @@ class TesseractRowProto:
         self.conf: float = conf
         self.text: str = text
 
-        self.obligatory_members: dict[str, any] = {}
+        self.obligatory_members: dict[str, Any] = {}
         for key, value in self.__dict__.items():
             if key == "obligatory_members":
                 continue
@@ -53,8 +53,11 @@ class TesseractRowProto:
     def __contains__(self, r: 'TesseractRow') -> bool:
         return r.getRect() in self.getRect()
     
-    def __eq__(self, other: 'TesseractRow') -> bool:
-        return all(value == other.__dict__[key] for key, value in self.__dict__.items() if key in self.obligatory_members)
+    def __eq__(self, other) -> bool:
+        if not isinstance(other, TesseractRowProto):
+            return NotImplemented
+        else:
+            return all(value == other.__dict__[key] for key, value in self.__dict__.items() if key in self.obligatory_members)
 
     def ispage(self) -> bool:
         return self.level == 1
@@ -75,7 +78,7 @@ class TesseractRowProto:
         src = self.assert_src()
         return src.getMedianLineHeight()
     
-    def isNear(self, r: 'TesseractRow', how: str = None, epsilon: int = None) -> bool:
+    def isNear(self, r: 'TesseractRow', how: str | None = None, epsilon: int | None = None) -> bool:
         if epsilon is None:
             epsilon = self.assertEpsilon()
         return self.getRect().isNear(r.getRect(), how, epsilon)
@@ -101,24 +104,39 @@ class TesseractRowProto:
 
         if len(src) == 0:
             raise Exception("Source list of TesseractRows is empty.")
+        
+        a: TesseractRow | None = None
         for r in src:
             if self.isword() and r.isline() and r.block_num == self.block_num and r.par_num == self.par_num and r.line_num == self.line_num:
-                return r
+                a = r
+                break
             elif self.isline() and r.ispar() and r.block_num == self.block_num and r.par_num == self.par_num:
-                return r
+                a = r
+                break
+        
+        if a is None:
+            raise Exception("No parent is found")
+        
+        return a
         
     def getRect(self) -> Rectangle:
         return Rectangle(self.x, self.y, self.x + self.w, self.y + self.h)
     
+    #### TODO Too ineffective implementation
     def next(self) -> 'TesseractRow':
         parent = self.getParent()
         siblings = parent.getChildren()
+        result = None
         for i, s in enumerate(siblings):
             if s == self:
                 if i == len(siblings) - 1:
                     raise Exception("It's the last sibling")
                 else:
-                    return siblings[i+1]
+                    result = siblings[i+1]
+        if result is None:
+            raise Exception("No sibling found")
+        else:
+            return result
 
     def setRect(self, rect: Rectangle):
         self.x = rect.A.x
@@ -127,6 +145,5 @@ class TesseractRowProto:
         self.h = rect.getH()
     
     def show(self, img, color: tuple[int,int,int] = (0,255,0)):
-        x,y,u,v = self.getRect()
-        cv2.rectangle(img, (x,y), (u,v), color, 2)
+        self.getRect().show(img, color)
 

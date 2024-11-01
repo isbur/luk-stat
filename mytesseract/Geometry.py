@@ -1,3 +1,5 @@
+import cv2
+from cv2.typing import MatLike
 from typing import Final, overload
 
 
@@ -27,21 +29,27 @@ class Rectangle:
     #### TODO Добавить проверку положительной ориентированности
     def __init__(self, A:Point|int, B:Point|int, u: int|None = None, v: int|None = None):
         if u is None and v is None and isinstance(A, Point) and isinstance(B, Point):
-            self.A: Final = A
-            self.B: Final = B
-            self.x: Final = A.x
-            self.y: Final = A.y
-            self.u: Final = B.x
-            self.v: Final= B.y
+            _A = A
+            _B = B
+            _x = A.x
+            _y = A.y
+            _u = B.x
+            _v= B.y
         elif isinstance(A, int) and isinstance(B, int) and isinstance(u, int) and isinstance(v, int):
-            self.A: Final = Point(A, B)
-            self.B: Final = Point(u, v)
-            self.x: Final = A
-            self.y: Final = B
-            self.u: Final = u
-            self.v: Final = v
+            _A = Point(A, B)
+            _B = Point(u, v)
+            _x = A
+            _y = B
+            _u = u
+            _v = v
         else:
             raise Exception("Unable to initialize Rectangle")
+        self.A: Final = _A
+        self.B: Final = _B
+        self.x: Final = _x
+        self.y: Final = _y
+        self.u: Final = _u
+        self.v: Final = _v
     
     def __iter__(self):
         for x in (self.A.x, self.A.y, self.B.x, self.B.y):
@@ -54,7 +62,7 @@ class Rectangle:
         return rect.x >= self.x and rect.y >= self.y and rect.u <= self.u and rect.v <= self.v
     
     # По умолчанию проверяет на пересечение с "расширенной" на epsilon версией другого прямоугольника
-    def isNear(self, rect: 'Rectangle', how: str = None, epsilon: int = None) -> bool:
+    def isNear(self, rect: 'Rectangle', how: str | None = None, epsilon: int | None = None) -> bool:
         if epsilon is None:
             raise Exception("'epsilon' is not set.")
         x, y, u, v = rect
@@ -74,3 +82,6 @@ class Rectangle:
 
     def getH(self) -> int:
         return self.B.y - self.A.y
+    
+    def show(self, img: MatLike, color: tuple[int,int,int] = (0,255,0)):
+        cv2.rectangle(img, (self.A.x, self.A.y), (self.B.x, self.B.y), color, 2)

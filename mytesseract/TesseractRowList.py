@@ -1,11 +1,12 @@
 import statistics
 import re
-from typing import Generator, Iterator, overload
-from Geometry import Rectangle
-from TesseractRow import TesseractRowProto
+from typing import Any, Iterable, Iterator, SupportsIndex, overload
+from .Geometry import Rectangle
+from .TesseractRow import TesseractRowProto
 
 
 class TesseractRow(TesseractRowProto):
+    #### TODO Переписать, реализовав логику создания иерархии TesseractRows при инициализации TesseractRowsList списком
     @overload
     def getChildren(self, src: 'TesseractRowList') -> 'TesseractRowList': ...
 
@@ -30,8 +31,10 @@ class TesseractRow(TesseractRowProto):
 
 class TesseractRowList(list):
 
-    def __init__(self, *args: list[TesseractRow] | Generator[TesseractRow, None, None] | dict[str, list[int|float]]):
-        if len(args) > 0 and isinstance(args[0], dict):
+    def __init__(self, *args: Iterable[TesseractRow] | dict[str, list[Any]] | None):
+        if len(args) > 0 and args[0] is None: 
+            super().__init__() 
+        elif len(args) > 0 and isinstance(args[0], dict):
             d = args[0]
             n_boxes = len(d['level'])
             tesseract_rows = []
@@ -44,12 +47,17 @@ class TesseractRowList(list):
         if len([r for r in self if r.ispage()]) > 1:
             raise Exception("Tesseract detected that there are multiple pages in the image. Multipage functionality of mytesseract is not implemented yet, so please split the image into separate pages.")
 
-    def __getitem__(self, item):
+    @overload
+    def __getitem__(self, item: SupportsIndex) -> TesseractRow: ...
+
+    @overload
+    def __getitem__(self, item: slice) -> 'TesseractRowList': ...
+
+    def __getitem__(self, item) -> 'TesseractRowList | TesseractRow':
         result = super().__getitem__(item)
         if isinstance(item, slice):
-            return TesseractRowList(result)
-        else:
-            return result
+            result = TesseractRowList(result)
+        return result
     
     def __iter__(self) -> Iterator[TesseractRow]:
         return super().__iter__()
@@ -74,17 +82,19 @@ class TesseractRowList(list):
         y2: int = max(r.y + r.h for r in self)
         return Rectangle(x1, y1, x2, y2)
 
-    def find(self, s: str) -> TesseractRow:
+    def find(self, s: str | TesseractRow) -> TesseractRow:
         if isinstance(s, str):
             for r in self:
                 if r.isword() and s in r.text:
-                    return r
+                    result = r
+                    break
         elif isinstance(s, TesseractRow):
             candidates = [r for r in self if r == s]
             print(f"Экземпляров строки найдено: {len(candidates)}")
-            return candidates[0]
+            result = candidates[0]
         else:
             raise Exception("Wrong 's' argument type.")
+        return result
     
     # Забиваем на разбивку на блоки
     def getPars(self) -> 'TesseractRowList':
@@ -97,14 +107,14 @@ class TesseractRowList(list):
         return self.getPars()[-1]
     
     def getMedianLineHeight(self) -> int:
-        return statistics.median(r.h for r in self if r.isline())
+        return int(statistics.median(r.h for r in self if r.isline()))
     
     def getMedianSpaceLength(self) -> int:
         if not all(r in self[0].getParent().getChildren() for r in self):
             raise Exception("Похоже, TesseractRowList содержит более одной строки или вы пытаетесь применить метод к нестрокам.")
         elif len(self) == 1:
             raise Exception("Всего одно слово в строке, как тут определить интервал между словами?")
-        return statistics.median(r.next().getRect().x - r.getRect().u for i, r in self.enumerate() if i != len(self) - 1)
+        return int(statistics.median(r.next().getRect().x - r.getRect().u for i, r in self.enumerate() if i != len(self) - 1))
     
     # WIP
     def tesscript(self, par_num: int, line_num: int = 0, word_num: int = 0) -> TesseractRow:
