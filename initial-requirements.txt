@@ -1,5 +1,6 @@
 # conda install pytorch torchvision torchaudio cpuonly -c pytorch
 # conda install opencv pytesseract tesseract detectron2 -c conda-forge
 # pip install layoutparser jsonpickle
+conda install numpy=1.26.4 # For mypy-1.13.0 to work
 conda install opencv pytesseract tesseract -c conda-forge
-pip install jsonpickle
+pip install jsonpickle mypy

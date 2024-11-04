@@ -1,4 +1,3 @@
-import cv2
 from copy import deepcopy
 from typing import Any, overload, TYPE_CHECKING
 from .Geometry import Rectangle
@@ -42,6 +41,7 @@ class TesseractRowProto:
                 self.obligatory_members[key] = value
 
         self.src: TesseractRowList|None = src
+        self.Rect = self.getRect()
         self.marked_as_detached = False
 
     def __repr__(self) -> str:
@@ -83,7 +83,7 @@ class TesseractRowProto:
             epsilon = self.assertEpsilon()
         return self.getRect().isNear(r.getRect(), how, epsilon)
 
-    def assert_src(self, src = None):
+    def assert_src(self, src = None) -> 'TesseractRowList':
         if src is None and self.src is None:
             raise Exception("Both internal and passed with arguments TessractRowList's are not set")
         if src is None:
@@ -125,7 +125,9 @@ class TesseractRowProto:
     #### TODO Too ineffective implementation
     def next(self) -> 'TesseractRow':
         parent = self.getParent()
-        siblings = parent.getChildren()
+        siblings = parent.children
+        if siblings is None:
+            raise Exception("Parent children not initialized")
         result = None
         for i, s in enumerate(siblings):
             if s == self:

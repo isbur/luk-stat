@@ -1,13 +1,13 @@
-import re
-import cv2
+import cv2 
 from cv2.typing import MatLike
 import json
 import statistics
-from typing import Iterable
-from mytesseract import TesseractRowList, Problem
+from typing import Callable
+from luk import Problem, LukProblems
+from luk.mytesseract import TesseractRowList, TesseractRow
 
 
-def PSM3(img: MatLike, d: dict[str, list[int|float|str]]):
+def PSM3(img: MatLike, d: dict[str, list[int|float|str]]) -> LukProblems:
 
     def trl(src = None) -> TesseractRowList:
         return TesseractRowList(src)
@@ -26,22 +26,22 @@ def PSM3(img: MatLike, d: dict[str, list[int|float|str]]):
     #### Отфильтруем физически удалённые от основного текста слова (и соответствующие им строки)
     text_word_rows = TesseractRowList()
     for r in text_line_rows:
-        for c in r.getChildren():
+        for c in r.children:
             text_word_rows.append(c)
 
     for r in text_line_rows:
-        for c in r.getChildren():
+        for c in r.children:
             if [c.isNear(wr) for wr in text_word_rows if c != wr].count(True) <= 1:
                 c.marked_as_detached = True
-                c.show(img, (0,0,255))
-    text_line_rows = trl(r for r in text_line_rows if not all(c.marked_as_detached for c in r.getChildren()))
+                # c.show(img, (0,0,255))
+    text_line_rows = trl(r for r in text_line_rows if not all(c.marked_as_detached for c in r.children))
     
     #### Отфильтруем также линии состоящие из слов шириной в ~1 пиксель
     for r in text_line_rows:
-        for c in r.getChildren():
+        for c in r.children:
             if c.w <= median_line_height // 3:
                 c.marked_as_detached = True
-    text_line_rows = trl(r for r in text_line_rows if not all(c.marked_as_detached for c in r.getChildren()))
+    text_line_rows = trl(r for r in text_line_rows if not all(c.marked_as_detached for c in r.children))
 
     #### "Прохудим" строки
     #### Логика следующая:
@@ -50,7 +50,9 @@ def PSM3(img: MatLike, d: dict[str, list[int|float|str]]):
     ####  - (пока отключено) И в дополнение к разрывам отсеиваем бессмысленные строки из небукв
     ####  - при отрисовке просто использовать envelope оставшихся children
     for r in text_line_rows:
-        children = r.getChildren()
+        children = r.children
+        if children is None:
+            raise Exception("Row children are not initialized")
         if len(children) == 1:
             continue
         median_space_length = children.getMedianSpaceLength()
@@ -69,7 +71,8 @@ def PSM3(img: MatLike, d: dict[str, list[int|float|str]]):
                 else:
                     rbound = j + 1
                     break
-        r.setRect(children[lbound:rbound].envelope())
+        r.children = children[lbound:rbound]
+        r.setRect(r.children.envelope())
 
     #### Отсортируем строки в порядке их нахождения на странице, сверху-вниз
     text_line_rows.sort(key = lambda r: r.y)
@@ -90,85 +93,115 @@ def PSM3(img: MatLike, d: dict[str, list[int|float|str]]):
         (0,255,0),
         (255,0,0)
     ]
-    for i, t in enumerate(text_line_blocks):
-        for j, r in t.enumerate():
-            r.show(img, colors[i % 2])
+    # for i, t in enumerate(text_line_blocks):
+    #     for j, r in t.enumerate():
+    #         r.show(img, colors[i % 2])
     
     #### Извлекаем задачи
-    problems: list[Problem] = []
-    counter = 0
-    accumulator = trl()
-    for i, b in enumerate(text_line_blocks):
-        for j, r in b.enumerate():
+    def extractProblems(problemConstructorCall: Callable[[TesseractRow, TesseractRowList],Problem]) -> tuple[LukProblems, list[int]]:
 
-            cv2.putText(img, str(counter), (r.x, r.y), cv2.FONT_HERSHEY_SIMPLEX, 1, (0,255,0), 2)
+        # Внешние переменные:
+        # tesseract_rows
+        # text_line_blocks
 
-            #### Извлекаем номер задачи
-            problem = Problem(r)
-            
-            #### Сопоставляем TesseractRows задачам
-            #### TODO научиться различать блоки-заголовки
-            if problem.number != -1:
-                if len(problems) > 0:
-                    problems[-1].rows = trl(r for r in accumulator)
-                    accumulator = trl()
-                else:
-                    pass
-                    #### TODO научиться присовокуплять accumulator к последней problem с предыдущей страницы
+        problems = LukProblems([], tesseract_rows)
+        indents: list[int] = []
+        counter = 0
+        accumulator = trl()
+        for i, b in enumerate(text_line_blocks):
+            for j, r in b.enumerate():
+
+                # cv2.putText(img, str(counter), (r.x, r.y), cv2.FONT_HERSHEY_SIMPLEX, 1, (0,255,0), 2)
+
+                #### Извлекаем номер задачи
+                problem = problemConstructorCall(r, accumulator)
                 
-            if problem.number != -1:
-                problems.append(problem)
+                
+                #### Сопоставляем TesseractRows задачам
+                #### TODO научиться различать блоки-заголовки
+                if problem.number != -1:
+                    if len(problems) > 0:
+                        problems[-1].rows = trl(r for r in accumulator)
+                        if len(accumulator) > 1:
+                            indents.append(accumulator[0].Rect.x - accumulator[1].Rect.x)
+                        accumulator = trl()
+                    else:
+                        pass
+                        #### TODO научиться присовокуплять accumulator к последней problem с предыдущей страницы
+                    
+                if problem.number != -1:
+                    problems.append(problem)
 
-            accumulator.append(r)
+                accumulator.append(r)
 
-            if counter in range(30, 40):
-                print(counter, i, accumulator)
+                # if counter in range(30, 40):
+                #     print(counter, i, accumulator)
 
-            counter += 1
+                counter += 1
+        #### Добавить содержимое аккумулятора при окончании всех блоков
+        problems[-1].rows = trl(r for r in accumulator)
+        accumulator = trl()
 
-        #### Добавить содержимое аккумулятора при каждом окончании блока
-        # print("End of block")
-        # print(i, accumulator)
+        return problems, indents
+
+    problemConstructorCall: Callable[[TesseractRow, TesseractRowList], Problem] = lambda r, _: Problem(r)
+    problems, indents = extractProblems(problemConstructorCall)
+
+    #TODO а что если у нас перемена с двухзначных на трёхзначные? Ну или с однозначных на двузначные...
+    def validate_modify_main_extra(problems: LukProblems) -> bool:
+        main_problems, extra_problems = problems.splitMainExtra()
+        if not main_problems.check_sequence():
+            main_problems.truncateNumbers()
+        return main_problems.check_sequence() and extra_problems.check_sequence()
+    # print(problems)
+
+    #### Если сходу не получилось, то попробуем добавить ограничение, что номер 
+    # новой задачи должен находиться после красной строки (смещён относительно 
+    # левых краёв аккумулированных до этого строк)
+    if not validate_modify_main_extra(problems):
+        median_indent = int(statistics.median(indents))
+        problemConstructorCall = lambda r, accum: Problem(r, accum, median_indent)
+        problems, _ = extractProblems(problemConstructorCall)
         # print(problems)
-    #### Добавить содержимое аккумулятора при каждом окончании всех блоков
-    problems[-1].rows = trl(r for r in accumulator)
-    accumulator = trl()
-
-    print(problems)
-
-    for i, p in enumerate(problems):
+    
+    if not validate_modify_main_extra(problems):
+        #### Fallback option — pure Tesseract paragraphs based implementation
+        #### Отдельное TODO — как в этом случае определять кусок задачи, относящийся к предыдущей странице
+        problems = LukProblems([], tesseract_rows)
+        par_rows = [r for r in tesseract_rows if r.ispar()]
+        par_rows.sort(key = lambda r: r.y)
+        for r in par_rows:
+            lines = r.children
+            problem = Problem(lines[0])
+            if problem.number == -1:
+                continue
+            problem.rows = lines
+            problems.append(problem)
+        if not validate_modify_main_extra(problems):
+            raise Exception("Couldn't validate problem numbers")
+    
+    for p in problems:
         if len(p.rows) > 0:
             p.Rect = p.rows.envelope()
-            p.Rect.show(img, (255,0,255))
+            # p.Rect.show(img, (255,0,255))
         else:
             print(p.number)
+    
+    return problems
 
-    def check_sequence(A: Iterable[int]) -> bool:
-        A = list(A)
-        A.sort()
-        answer = True
-        for i, n in enumerate(A):
-            if i == len(A) - 1:
-                continue
-            n = int(n)
-            if (int(A[i + 1]) - n) != 1:
-                answer = False
-                break
-        return answer
-    #TODO а что если у нас перемена с двухзначных на трёхзначные? Ну или с однозначных на двузначные...
-    main_problems = [p for p in problems if not p.extra]
-    if not check_sequence(p.number for p in main_problems):
-        median_str_len = int(statistics.median(len(str(p.number)) for p in main_problems))
-        for p in main_problems:
-            p.number = int(str(p.number)[:median_str_len])
-    extra_problems = [p for p in problems if p.extra]
-    if not check_sequence(p.number for p in main_problems) or not check_sequence(p.number for p in extra_problems):
-        raise Exception("Couldn't validate problem numbers")
+
+def show(img: MatLike):
+    #### Fullscreen by default
+    cv2.namedWindow('img', cv2.WND_PROP_FULLSCREEN)
+    cv2.setWindowProperty("img", cv2.WND_PROP_FULLSCREEN, cv2.WINDOW_FULLSCREEN)
+    ####
+    cv2.imshow('img',img)
+    cv2.waitKey(0)
 
     
 def main() -> None:
 
-    fileNumber = 5
+    fileNumber = 1
 
     img: MatLike = cv2.imread(f"./PNGs/{str(fileNumber).zfill(2)}.png")
 
@@ -176,12 +209,7 @@ def main() -> None:
         d: dict[str, list[int|float|str]] = json.load(f)
     PSM3(img, d)
 
-    #### Fullscreen by default
-    cv2.namedWindow('img', cv2.WND_PROP_FULLSCREEN)
-    cv2.setWindowProperty("img", cv2.WND_PROP_FULLSCREEN, cv2.WINDOW_FULLSCREEN)
-    ####
-    cv2.imshow('img',img)
-    cv2.waitKey(0)
+    show(img)
 
 
 if __name__ == "__main__":

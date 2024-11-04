@@ -6,32 +6,33 @@ from .TesseractRow import TesseractRowProto
 
 
 class TesseractRow(TesseractRowProto):
-    #### TODO Переписать, реализовав логику создания иерархии TesseractRows при инициализации TesseractRowsList списком
-    @overload
-    def getChildren(self, src: 'TesseractRowList') -> 'TesseractRowList': ...
 
-    @overload
-    def getChildren(self) -> 'TesseractRowList': ...
+    def __init__(self, *args) -> None:
+        super().__init__(*args)
+        self.children: TesseractRowList = TesseractRowList()
 
-    def getChildren(self, src = None):
+    #### TODO Дописать логику для блоков и страниц
+    def initChildren(self): 
         
-        src = self.assert_src(src)
+        if self.src is None:
+            raise Exception("Source TesseractRowList not initialized")
         
         children = []
         if self.ispar():
-            children = [r for r in src if r.level == 4 and r.par_num == self.par_num]
-            raise Exception("Yet not implemented for paragraphs")
+            children = [r for r in self.src if r.level == 4 and r.page_num == self.page_num and r.block_num == self.block_num and r.par_num == self.par_num]
         elif self.isline():
-            children = [r for r in src if r.level == 5 and r.page_num == self.page_num and r.block_num == self.block_num and r.par_num == self.par_num and r.line_num == self.line_num]
-        else:
-            raise Exception("Yet not implemented")
-        return TesseractRowList(children)
+            children = [r for r in self.src if r.level == 5 and r.page_num == self.page_num and r.block_num == self.block_num and r.par_num == self.par_num and r.line_num == self.line_num]
+
+        self.children = TesseractRowList(children)
     
 
 
 class TesseractRowList(list):
 
     def __init__(self, *args: Iterable[TesseractRow] | dict[str, list[Any]] | None):
+
+        self.median_line_height: int | None = None
+
         if len(args) > 0 and args[0] is None: 
             super().__init__() 
         elif len(args) > 0 and isinstance(args[0], dict):
@@ -42,6 +43,7 @@ class TesseractRowList(list):
                 r = TesseractRow(d['level'][i],d['page_num'][i],d['block_num'][i],d['par_num'][i],d['line_num'][i],d['word_num'][i],d['left'][i],d['top'][i],d['width'][i],d['height'][i],d['conf'][i],d['text'][i],self)
                 tesseract_rows.append(r)
             super().__init__(tesseract_rows)
+            [r.initChildren() for r in self]
         else:
             super().__init__(*args)
         if len([r for r in self if r.ispage()]) > 1:
@@ -107,10 +109,15 @@ class TesseractRowList(list):
         return self.getPars()[-1]
     
     def getMedianLineHeight(self) -> int:
-        return int(statistics.median(r.h for r in self if r.isline()))
+        if self.median_line_height is None:
+            self.median_line_height = int(statistics.median(r.h for r in self if r.isline()))
+        return self.median_line_height
     
     def getMedianSpaceLength(self) -> int:
-        if not all(r in self[0].getParent().getChildren() for r in self):
+        siblings = self[0].getParent().children
+        if siblings is None:
+            raise Exception("Parent children not initialized")
+        if not all(r in siblings for r in self):
             raise Exception("Похоже, TesseractRowList содержит более одной строки или вы пытаетесь применить метод к нестрокам.")
         elif len(self) == 1:
             raise Exception("Всего одно слово в строке, как тут определить интервал между словами?")
