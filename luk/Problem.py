@@ -14,7 +14,7 @@ class Problem:
         self.Rect: Rectangle | None = None
         self.statement_img: MatLike | None = None
     
-    number_re_str = r'^\d{1,3}\S?[\.,]$'
+    number_re_str = r'^\d{3}\S?$' # TODO: ну а хуле, ведь номера задач могут быть только 3-значными, да?
     extra_number_prefix_re_str = r'^[дД]\.?$'
 
     def try_main_problem_init(self, row: TesseractRow, accum: TesseractRowList | None, median_indent: int = 0) -> bool:
@@ -88,7 +88,7 @@ class Problem:
 
 
     @overload
-    def __init__(self, number: int = 0, extra: bool = False): ...
+    def __init__(self, number: int = -1, extra: bool = False): ...
 
     @overload
     def __init__(self, number: TesseractRow): ...
@@ -96,9 +96,9 @@ class Problem:
     @overload
     def __init__(self, number: TesseractRow, extra: TesseractRowList, indent: int): ...
 
-    def __init__(self, number: int | TesseractRow = 0, extra: bool | TesseractRowList = False, indent:int = 0) -> None:
+    def __init__(self, number: int | TesseractRow = -1, extra: bool | TesseractRowList = False, indent:int = 0) -> None:
         if isinstance(number, int) and isinstance(extra, bool):
-            self.default_init()
+            self.default_init(number, extra)
         elif isinstance(number, TesseractRow) and extra == False:
             self.tess_init(number)
         elif isinstance(number, TesseractRow) and isinstance(extra, TesseractRowList):

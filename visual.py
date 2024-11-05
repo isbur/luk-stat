@@ -31,9 +31,9 @@ def PSM3(img: MatLike, d: dict[str, list[int|float|str]]) -> LukProblems:
 
     for r in text_line_rows:
         for c in r.children:
-            if [c.isNear(wr) for wr in text_word_rows if c != wr].count(True) <= 1:
+            if [c.isNear(wr, epsilon=2*median_line_height) for wr in text_word_rows if c != wr].count(True) <= 1:
                 c.marked_as_detached = True
-                # c.show(img, (0,0,255))
+                c.show(img, (0,0,255))
     text_line_rows = trl(r for r in text_line_rows if not all(c.marked_as_detached for c in r.children))
     
     #### Отфильтруем также линии состоящие из слов шириной в ~1 пиксель
@@ -58,7 +58,7 @@ def PSM3(img: MatLike, d: dict[str, list[int|float|str]]) -> LukProblems:
         median_space_length = children.getMedianSpaceLength()
         lbound, rbound = 0, len(children)
         for j, child in children.enumerate():
-            if j == len(children) - 1:
+            if j in (0, len(children) - 1): # игнорируем правило для первого слова - скорее всего, это номер задачи (atan7)
                 continue
             next = children[j + 1] 
             space_length = next.x - child.getRect().u
@@ -145,40 +145,19 @@ def PSM3(img: MatLike, d: dict[str, list[int|float|str]]) -> LukProblems:
         return problems, indents
 
     problemConstructorCall: Callable[[TesseractRow, TesseractRowList], Problem] = lambda r, _: Problem(r)
-    problems, indents = extractProblems(problemConstructorCall)
+    problems, _ = extractProblems(problemConstructorCall)
 
-    #TODO а что если у нас перемена с двухзначных на трёхзначные? Ну или с однозначных на двузначные...
-    def validate_modify_main_extra(problems: LukProblems) -> bool:
-        main_problems, extra_problems = problems.splitMainExtra()
-        if not main_problems.check_sequence():
-            main_problems.truncateNumbers()
-        return main_problems.check_sequence() and extra_problems.check_sequence()
-    # print(problems)
-
-    #### Если сходу не получилось, то попробуем добавить ограничение, что номер 
-    # новой задачи должен находиться после красной строки (смещён относительно 
-    # левых краёв аккумулированных до этого строк)
-    if not validate_modify_main_extra(problems):
-        median_indent = int(statistics.median(indents))
-        problemConstructorCall = lambda r, accum: Problem(r, accum, median_indent)
-        problems, _ = extractProblems(problemConstructorCall)
-        # print(problems)
+        
+    # if not problems.check_sequence():
+    #     print("Couldn't validate problem sequence:", problems)
     
-    if not validate_modify_main_extra(problems):
-        #### Fallback option — pure Tesseract paragraphs based implementation
-        #### Отдельное TODO — как в этом случае определять кусок задачи, относящийся к предыдущей странице
-        problems = LukProblems([], tesseract_rows)
-        par_rows = [r for r in tesseract_rows if r.ispar()]
-        par_rows.sort(key = lambda r: r.y)
-        for r in par_rows:
-            lines = r.children
-            problem = Problem(lines[0])
-            if problem.number == -1:
-                continue
-            problem.rows = lines
-            problems.append(problem)
-        if not validate_modify_main_extra(problems):
-            raise Exception("Couldn't validate problem numbers")
+    # Заполним "дырки" пустыми задачами с соответствующими номерами
+    # if not problems.check_sequence():
+    #     full_number_sequence = list(range(problems[0].number, problems[-1].number + 1))
+    #     for i, n in enumerate(full_number_sequence):
+    #         if all(n != p.number for p in problems):
+    #             problems.problems.insert(i, Problem(n))
+
     
     for p in problems:
         if len(p.rows) > 0:
@@ -201,9 +180,9 @@ def show(img: MatLike):
     
 def main() -> None:
 
-    fileNumber = 1
+    fileNumber = 10
 
-    img: MatLike = cv2.imread(f"./PNGs/{str(fileNumber).zfill(2)}.png")
+    img: MatLike = cv2.imread(f"./PNGs/input-{str(fileNumber).zfill(2)}.png")
 
     with open(f"./JSONs-PSM3/{str(fileNumber).zfill(2)}.json", "r") as f:
         d: dict[str, list[int|float|str]] = json.load(f)
