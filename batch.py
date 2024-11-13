@@ -20,11 +20,15 @@ for i in range(1, number + 1):
         d: dict[str, list[int|float|str]] = json.load(f)
     
     problems = PSM3(img, d)
-    if problems.check_sequence():
-        numbers = [p.number for p in problems]
-        problem_ranges[i] = (min(numbers), max(numbers))
-    else:
-        problem_ranges[i] = (0, 0)
+    # Упрощённый подход
+    numbers = [p.number for p in problems]
+    problem_ranges[i] = (min(numbers), max(numbers))
+    # if problems.check_sequence():
+    #     numbers = [p.number for p in problems]
+    #     problem_ranges[i] = (min(numbers), max(numbers))
+    # else:
+    #     problem_ranges[i] = (0, 0)
+
 
     # doc.add_picture(src_img_path, width = Inches(6.0))
 
