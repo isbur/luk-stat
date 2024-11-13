@@ -4,7 +4,7 @@ from docx import Document
 from docx.shared import Inches
 from PIL import Image
 from visual import PSM3
-from config import workdir, number
+from config import workdir, src_img_prefix, number
 
 
 print("Processing images...")
@@ -13,7 +13,7 @@ doc = Document()
 problem_ranges: dict[int, tuple[int, int]] = {}
 # for i in range(1, 2):
 for i in range(1, number + 1):
-    src_img_path = f"{workdir}/src/input-{str(i).zfill(2)}.png"
+    src_img_path = f"{workdir}/src/{src_img_prefix}{str(i).zfill(2)}.png"
     img = cv2.imread(src_img_path)
 
     with open(f"{workdir}/psm3/{str(i).zfill(2)}.json", "r") as f:
