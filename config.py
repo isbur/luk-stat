@@ -1,2 +1,2 @@
-workdir = "./atan8"
-number = 36
+workdir = "./projects/luk"
+number = 28
