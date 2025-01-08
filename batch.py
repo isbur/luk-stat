@@ -3,8 +3,10 @@ import cv2
 from docx import Document
 from docx.shared import Inches
 from PIL import Image
+import traceback
 from visual import PSM3
-from config import workdir, src_img_prefix, number
+import config
+from config import workdir, number
 
 
 print("Processing images...")
@@ -13,16 +15,23 @@ doc = Document()
 problem_ranges: dict[int, tuple[int, int]] = {}
 # for i in range(1, 2):
 for i in range(1, number + 1):
-    src_img_path = f"{workdir}/src/{src_img_prefix}{str(i).zfill(2)}.png"
+    src_img_path = f"{workdir}/src/{str(i).zfill(2)}.png"
     img = cv2.imread(src_img_path)
 
     with open(f"{workdir}/psm3/{str(i).zfill(2)}.json", "r") as f:
         d: dict[str, list[int|float|str]] = json.load(f)
     
-    problems = PSM3(img, d)
-    # Упрощённый подход
-    numbers = [p.number for p in problems]
-    problem_ranges[i] = (min(numbers), max(numbers))
+    try:
+        problems, err = PSM3(img, d)
+    except Exception:
+        traceback.print_exc()
+
+    if not err:
+        # Упрощённый подход
+        numbers = [p.number for p in problems]
+        problem_ranges[i] = (min(numbers), max(numbers))
+    else:
+        problem_ranges[i] = (0, 0)
     # if problems.check_sequence():
     #     numbers = [p.number for p in problems]
     #     problem_ranges[i] = (min(numbers), max(numbers))

@@ -7,7 +7,7 @@ from luk import Problem, LukProblems
 from luk.mytesseract import TesseractRowList, TesseractRow
 
 
-def PSM3(img: MatLike, d: dict[str, list[int|float|str]]) -> LukProblems:
+def PSM3(img: MatLike, d: dict[str, list[int|float|str]]) -> tuple[LukProblems, bool]:
 
     def trl(src = None) -> TesseractRowList:
         return TesseractRowList(src)
@@ -98,7 +98,7 @@ def PSM3(img: MatLike, d: dict[str, list[int|float|str]]) -> LukProblems:
     #         r.show(img, colors[i % 2])
     
     #### Извлекаем задачи
-    def extractProblems(problemConstructorCall: Callable[[TesseractRow, TesseractRowList],Problem]) -> tuple[LukProblems, list[int]]:
+    def extractProblems(problemConstructorCall: Callable[[TesseractRow, TesseractRowList],Problem]) -> tuple[LukProblems, list[int], bool]:
 
         # Внешние переменные:
         # tesseract_rows
@@ -138,14 +138,19 @@ def PSM3(img: MatLike, d: dict[str, list[int|float|str]]) -> LukProblems:
                 #     print(counter, i, accumulator)
 
                 counter += 1
-        #### Добавить содержимое аккумулятора при окончании всех блоков
-        problems[-1].rows = trl(r for r in accumulator)
-        accumulator = trl()
-
-        return problems, indents
+        
+        if len(problems) == 0:
+            err = True
+            return problems, indents, err
+        else:
+            #### Добавить содержимое аккумулятора при окончании всех блоков
+            problems[-1].rows = trl(r for r in accumulator)
+            accumulator = trl()
+            err = False
+            return problems, indents, err
 
     problemConstructorCall: Callable[[TesseractRow, TesseractRowList], Problem] = lambda r, _: Problem(r)
-    problems, _ = extractProblems(problemConstructorCall)
+    problems, _, err = extractProblems(problemConstructorCall)
 
         
     # if not problems.check_sequence():
@@ -166,7 +171,7 @@ def PSM3(img: MatLike, d: dict[str, list[int|float|str]]) -> LukProblems:
         else:
             print(p.number)
     
-    return problems
+    return problems, err
 
 
 def show(img: MatLike):

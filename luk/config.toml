@@ -1,0 +1,1 @@
+problem_number_re_str = "^\\d{4}\\.?\\S?$"

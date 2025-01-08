@@ -1,5 +1,7 @@
 from cv2.typing import MatLike
 import re
+from pathlib import Path
+import tomllib
 from typing import overload
 from .mytesseract.Geometry import Rectangle
 from .mytesseract.TesseractRowList import TesseractRowList, TesseractRow
@@ -14,7 +16,9 @@ class Problem:
         self.Rect: Rectangle | None = None
         self.statement_img: MatLike | None = None
     
-    number_re_str = r'^\d{3}\S?$' # TODO: ну а хуле, ведь номера задач могут быть только 3-значными, да?
+    with open(Path.cwd() / Path("luk/config.toml"), "rb") as f:
+        d = tomllib.load(f)
+    number_re_str = d['problem_number_re_str'] # TODO: ну а хуле, ведь номера задач могут быть только 3-значными, да?
     extra_number_prefix_re_str = r'^[дД]\.?$'
 
     def try_main_problem_init(self, row: TesseractRow, accum: TesseractRowList | None, median_indent: int = 0) -> bool:
@@ -24,6 +28,8 @@ class Problem:
             raise Exception("Row children are not initialized")
         epsilon = 4
 
+        # [print(child.text, end = " ") for child in children]
+        # print()
         problem_number_match = re.match(Problem.number_re_str, children[0].text)
         if problem_number_match is not None:
             problem_label = problem_number_match.group(0)
@@ -35,18 +41,20 @@ class Problem:
                 "Ю": "1",
                 "%": "",
                 ")": "",
+                "\"":"",
+                "-": "",
             }
             for key, value in replaces.items():
                 problem_label = problem_label.replace(key, value)
 
             
             if accum is not None and len(accum) > 0:
-                # print("#" * 40)
-                # print(problem_label)
-                # print(accum)
-                # print(row)
+                print("#" * 40)
+                print(problem_label)
+                print(accum)
+                print(row)
                 real_indent = row.getRect().x - accum[-1].getRect().x
-                # print(real_indent, median_indent)
+                print(real_indent, median_indent)
                 if median_indent - epsilon < real_indent < median_indent + epsilon or abs(real_indent) > 2 * median_indent:
                     pass
                 else:
