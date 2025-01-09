@@ -1,4 +1,0 @@
-https://pyimagesearch.com/2021/11/15/tesseract-page-segmentation-modes-psms-explained-how-to-improve-your-ocr-accuracy/
-Но значение по умолчанию (--psm 3) для Лукашика мне понравилось больше, чем "--psm 6", лол.
-Зато я узнал, что Тессеракт сам предоставляет информацию о строках и параграфах
-UPD: всё-таки решил использовать PSM6
